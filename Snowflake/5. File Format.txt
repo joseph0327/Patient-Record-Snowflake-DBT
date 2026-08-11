@@ -1,0 +1,47 @@
+-- File formats, stages, and COPY INTO for patient record ingestion from S3
+-- Co-authored with CoCo
+
+--########################### FILE FORMAT ###########################
+
+CREATE OR REPLACE FILE FORMAT  PATIENT_RECORD_DB.BRONZE.csv_format
+  TYPE = 'CSV' 
+  FIELD_DELIMITER = ','
+  SKIP_HEADER = 1
+  ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE;
+
+
+CREATE OR REPLACE FILE FORMAT PATIENT_RECORD_DB.BRONZE.json_format
+TYPE = 'JSON'
+STRIP_OUTER_ARRAY = TRUE;
+
+
+
+-- ########################### STAGE ###########################
+
+-- stage for csv
+CREATE OR REPLACE STAGE PATIENT_RECORD_DB.BRONZE.patient_record_csv_stage
+URL = 's3://snowbucketj2026/source/'
+CREDENTIALS = (
+    AWS_KEY_ID = 'xxxxxxxxxxxxxxxxxxx',
+    AWS_SECRET_KEY = 'xxxxxxxxxxxxxxxxxxxxxxxx/xxxxxxx'
+)
+FILE_FORMAT = (FORMAT_NAME = PATIENT_RECORD_DB.BRONZE.csv_format);
+
+
+-- stage for json
+CREATE OR REPLACE STAGE PATIENT_RECORD_DB.BRONZE.patient_record_json_stage
+URL = 's3://snowbucketj2026/source/'
+CREDENTIALS = (
+    AWS_KEY_ID = 'xxxxxxxxxxxxxxxxxxxxx',
+    AWS_SECRET_KEY = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxx/xxxxxxxxx'
+)
+FILE_FORMAT = (
+    FORMAT_NAME = 'PATIENT_RECORD_DB.BRONZE.CSV_FORMAT'
+)
+PATTERN = '.*lab_result.*\.csv';
+
+--list all data in the stage
+LIST @PATIENT_RECORD_DB.BRONZE.patient_record_csv_stage/lab_result_24072026.csv
+LIST @PATIENT_RECORD_DB.BRONZE.patient_record_json_stage;
+
+

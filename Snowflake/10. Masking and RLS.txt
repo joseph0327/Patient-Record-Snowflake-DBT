@@ -1,0 +1,442 @@
+-- ============================================================
+-- 7.2 DYNAMIC DATA MASKING
+-- ============================================================
+-- Purpose:
+-- Protect sensitive patient information using Snowflake
+-- Dynamic Data Masking and role-based visibility.
+-- Sensitive fields:
+-- FIRST_NAME
+-- LAST_NAME
+-- SSN
+-- EMAIL
+-- PHONE
+-- ADDRESS
+-- MEDICAL_HISTORY
+-- INSURANCE_NUMBER
+-- ============================================================
+-- 1. SECURITY ADMIN PRIVILEGES
+-- ============================================================
+USE ROLE ACCOUNTADMIN;
+GRANT USAGE ON DATABASE PATIENT_RECORD_DB TO ROLE PATIENT_SECURITY_ADMIN;
+GRANT USAGE ON SCHEMA PATIENT_RECORD_DB.SECURITY TO ROLE PATIENT_SECURITY_ADMIN;
+GRANT CREATE MASKING POLICY ON SCHEMA PATIENT_RECORD_DB.SECURITY TO ROLE PATIENT_SECURITY_ADMIN;
+-- ============================================================
+-- 2. REQUIRED DATABASE / SCHEMA ACCESS
+-- ============================================================
+GRANT USAGE ON DATABASE PATIENT_RECORD_DB TO ROLE PATIENT_DATA_ENGINEER;
+GRANT USAGE ON SCHEMA PATIENT_RECORD_DB.SILVER TO ROLE PATIENT_DATA_ENGINEER;
+GRANT USAGE ON DATABASE PATIENT_RECORD_DB TO ROLE PATIENT_DATA_ANALYST;
+GRANT USAGE ON SCHEMA PATIENT_RECORD_DB.SILVER TO ROLE PATIENT_DATA_ANALYST;
+GRANT USAGE ON DATABASE PATIENT_RECORD_DB TO ROLE PATIENT_DOCTOR;
+GRANT USAGE ON SCHEMA PATIENT_RECORD_DB.SILVER TO ROLE PATIENT_DOCTOR;
+-- ============================================================
+-- 3. SWITCH TO SECURITY ADMIN
+-- ============================================================
+USE ROLE PATIENT_SECURITY_ADMIN;
+-- ============================================================
+-- 4. MASKING POLICY - PATIENT NAME
+-- ============================================================
+CREATE OR REPLACE MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_PATIENT_NAME
+AS (VAL VARCHAR)
+RETURNS VARCHAR ->
+CASE
+    WHEN IS_ROLE_IN_SESSION('PATIENT_SECURITY_ADMIN') THEN VAL
+    WHEN IS_ROLE_IN_SESSION('PATIENT_DOCTOR') THEN VAL
+    WHEN IS_ROLE_IN_SESSION('PATIENT_DATA_ENGINEER') THEN VAL
+    ELSE 'MASKED PATIENT'
+END;
+-- ============================================================
+-- 5. MASKING POLICY - SSN
+-- ============================================================
+CREATE OR REPLACE MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_SSN
+AS (VAL VARCHAR)
+RETURNS VARCHAR ->
+CASE
+    WHEN IS_ROLE_IN_SESSION('PATIENT_SECURITY_ADMIN') THEN VAL
+    ELSE '***-**-****'
+END;
+-- ============================================================
+-- 6. MASKING POLICY - EMAIL
+-- ============================================================
+CREATE OR REPLACE MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_EMAIL
+AS (VAL VARCHAR)
+RETURNS VARCHAR ->
+CASE
+    WHEN IS_ROLE_IN_SESSION('PATIENT_SECURITY_ADMIN') THEN VAL
+    WHEN IS_ROLE_IN_SESSION('PATIENT_DOCTOR') THEN VAL
+    WHEN IS_ROLE_IN_SESSION('PATIENT_DATA_ENGINEER') THEN VAL
+    WHEN VAL IS NULL THEN NULL
+    ELSE REGEXP_REPLACE(VAL,'^(.).+(@.+)$','\\1***\\2')
+END;
+-- ============================================================
+-- 7. MASKING POLICY - PHONE
+-- ============================================================
+CREATE OR REPLACE MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_PHONE
+AS (VAL VARCHAR)
+RETURNS VARCHAR ->
+CASE
+    WHEN IS_ROLE_IN_SESSION('PATIENT_SECURITY_ADMIN') THEN VAL
+    WHEN IS_ROLE_IN_SESSION('PATIENT_DOCTOR') THEN VAL
+    WHEN IS_ROLE_IN_SESSION('PATIENT_DATA_ENGINEER') THEN VAL
+    WHEN VAL IS NULL THEN NULL
+    ELSE CONCAT('*******',RIGHT(REGEXP_REPLACE(VAL,'[^0-9]',''),4))
+END;
+-- ============================================================
+-- 8. MASKING POLICY - ADDRESS
+-- ============================================================
+CREATE OR REPLACE MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_ADDRESS
+AS (VAL VARCHAR)
+RETURNS VARCHAR ->
+CASE
+    WHEN IS_ROLE_IN_SESSION('PATIENT_SECURITY_ADMIN') THEN VAL
+    WHEN IS_ROLE_IN_SESSION('PATIENT_DOCTOR') THEN VAL
+    WHEN IS_ROLE_IN_SESSION('PATIENT_DATA_ENGINEER') THEN VAL
+    ELSE 'MASKED ADDRESS'
+END;
+-- ============================================================
+-- 9. MASKING POLICY - MEDICAL HISTORY (ARRAY type)
+-- ============================================================
+CREATE OR REPLACE MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_MEDICAL_HISTORY
+AS (VAL ARRAY)
+RETURNS ARRAY ->
+CASE
+    WHEN IS_ROLE_IN_SESSION('PATIENT_SECURITY_ADMIN') THEN VAL
+    WHEN IS_ROLE_IN_SESSION('PATIENT_DOCTOR') THEN VAL
+    WHEN IS_ROLE_IN_SESSION('PATIENT_DATA_ENGINEER') THEN VAL
+    ELSE ARRAY_CONSTRUCT('MASKED')
+END;
+-- ============================================================
+-- 10. MASKING POLICY - INSURANCE MEMBER NUMBER
+-- ============================================================
+CREATE OR REPLACE MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_INSURANCE_MEMBER_NUMBER
+AS (VAL VARCHAR)
+RETURNS VARCHAR ->
+CASE
+    WHEN IS_ROLE_IN_SESSION('PATIENT_SECURITY_ADMIN') THEN VAL
+    WHEN IS_ROLE_IN_SESSION('PATIENT_DATA_ENGINEER') THEN VAL
+    ELSE '********'
+END;
+-- ============================================================
+-- 11. APPLY MASKING POLICY - PATIENT NAME
+-- ============================================================
+ALTER TABLE PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+MODIFY COLUMN FIRST_NAME
+SET MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_PATIENT_NAME;
+
+ALTER TABLE PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+MODIFY COLUMN LAST_NAME
+SET MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_PATIENT_NAME;
+
+-- ============================================================
+-- 12. APPLY MASKING POLICY - SSN
+-- ============================================================
+ALTER TABLE PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+MODIFY COLUMN SSN
+SET MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_SSN;
+-- ============================================================
+-- 13. APPLY MASKING POLICY - EMAIL
+-- ============================================================
+ALTER TABLE PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+MODIFY COLUMN EMAIL
+SET MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_EMAIL;
+-- ============================================================
+-- 14. APPLY MASKING POLICY - PHONE
+-- ============================================================
+ALTER TABLE PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+MODIFY COLUMN PHONE
+SET MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_PHONE;
+-- ============================================================
+-- 15. APPLY MASKING POLICY - ADDRESS
+-- ============================================================
+ALTER TABLE PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+MODIFY COLUMN ADDRESS
+SET MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_ADDRESS;
+-- ============================================================
+-- 16. APPLY MASKING POLICY - MEDICAL HISTORY
+-- ============================================================
+ALTER TABLE PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+MODIFY COLUMN MEDICAL_HISTORY
+SET MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_MEDICAL_HISTORY;
+-- ============================================================
+-- 17. APPLY MASKING POLICY - INSURANCE MEMBER NUMBER
+-- ============================================================
+ALTER TABLE PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+MODIFY COLUMN INSURANCE_NUMBER
+SET MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_INSURANCE_MEMBER_NUMBER;
+-- ============================================================
+-- 18. VALIDATE MASKING POLICIES
+-- ============================================================
+SHOW MASKING POLICIES
+IN SCHEMA PATIENT_RECORD_DB.SECURITY;
+-- ============================================================
+-- 19. DESCRIBE MASKING POLICIES
+-- ============================================================
+DESCRIBE MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_PATIENT_NAME;
+DESCRIBE MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_SSN;
+DESCRIBE MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_EMAIL;
+DESCRIBE MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_PHONE;
+DESCRIBE MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_ADDRESS;
+DESCRIBE MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_MEDICAL_HISTORY;
+DESCRIBE MASKING POLICY PATIENT_RECORD_DB.SECURITY.MASK_INSURANCE_MEMBER_NUMBER;
+-- ============================================================
+-- 20. TEST AS DATA ANALYST
+-- ============================================================
+USE ROLE PATIENT_DATA_ANALYST;
+SELECT FIRST_NAME,LAST_NAME,SSN,EMAIL,PHONE,ADDRESS,MEDICAL_HISTORY,INSURANCE_NUMBER
+FROM PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+LIMIT 10;
+-- ============================================================
+-- 21. TEST AS DOCTOR
+-- ============================================================
+USE ROLE PATIENT_DOCTOR;
+SELECT FIRST_NAME,LAST_NAME,SSN,EMAIL,PHONE,ADDRESS,MEDICAL_HISTORY,INSURANCE_NUMBER
+FROM PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+LIMIT 10;
+-- ============================================================
+-- 22. TEST AS DATA ENGINEER
+-- ============================================================
+USE ROLE PATIENT_DATA_ENGINEER;
+SELECT FIRST_NAME,LAST_NAME,SSN,EMAIL,PHONE,ADDRESS,MEDICAL_HISTORY,INSURANCE_NUMBER
+FROM PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+LIMIT 10;
+-- ============================================================
+-- 23. TEST AS SECURITY ADMIN
+-- ============================================================
+USE ROLE PATIENT_SECURITY_ADMIN;
+SELECT FIRST_NAME,LAST_NAME,SSN,EMAIL,PHONE,ADDRESS,MEDICAL_HISTORY,INSURANCE_NUMBER
+FROM PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+LIMIT 10;
+
+-- ============================================================
+-- 24. TEST SUSER
+-- ============================================================
+-- create a user then login to the user
+USE ROLE ACCOUNTADMIN;
+CREATE OR REPLACE USER TEST_PATIENT_ANALYST
+PASSWORD = '123456!'
+DEFAULT_ROLE = PATIENT_DATA_ANALYST
+DEFAULT_WAREHOUSE = WH_PATIENT_ANALYTICS;
+--grant role to user
+GRANT ROLE PATIENT_DATA_ANALYST TO USER TEST_PATIENT_ANALYST;
+--check the grants for the role
+SHOW GRANTS TO USER TEST_PATIENT_ANALYST;
+--grant role/user to access the table
+USE ROLE ACCOUNTADMIN;
+GRANT SELECT ON TABLE PATIENT_RECORD_DB.SILVER.DIM_PATIENT TO ROLE PATIENT_DATA_ANALYST;
+
+
+
+
+-- ============================================================
+-- ============================================================
+--                  Row-Level Security
+-- ============================================================
+-- ============================================================
+-- 1. CREATE DOCTOR USER MAPPING TABLE
+-- ============================================================
+USE ROLE ACCOUNTADMIN;
+CREATE OR REPLACE TABLE PATIENT_RECORD_DB.SECURITY.DOCTOR_USER_MAPPING (
+    SNOWFLAKE_USER VARCHAR(255) NOT NULL,
+    DOCTOR_ID VARCHAR(255) NOT NULL,
+    ACCESS_ACTIVE BOOLEAN DEFAULT TRUE,
+    CREATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    UPDATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT UK_DOCTOR_USER_MAPPING UNIQUE (SNOWFLAKE_USER)
+);
+-- ============================================================
+-- 2. INSERT DOCTOR USER MAPPING
+-- ============================================================
+INSERT INTO PATIENT_RECORD_DB.SECURITY.DOCTOR_USER_MAPPING (
+    SNOWFLAKE_USER,
+    DOCTOR_ID,
+    ACCESS_ACTIVE
+)
+VALUES
+('DR_TEST_001', 'DOC462', TRUE);
+-- ============================================================
+-- 3. VERIFY DOCTOR MAPPING
+-- ============================================================
+SELECT
+    SNOWFLAKE_USER,
+    DOCTOR_ID,
+    ACCESS_ACTIVE
+FROM PATIENT_RECORD_DB.SECURITY.DOCTOR_USER_MAPPING
+WHERE UPPER(SNOWFLAKE_USER) = UPPER('DR_TEST_001');
+-- ============================================================
+-- 4. VERIFY DOCTOR TO PATIENT RELATIONSHIP
+-- ============================================================
+SELECT DISTINCT
+    PATIENT_ID,
+    DOCTOR_ID
+FROM PATIENT_RECORD_DB.SILVER.FACT_VISIT
+WHERE DOCTOR_ID IS NOT NULL
+AND PATIENT_ID IS NOT NULL
+ORDER BY DOCTOR_ID, PATIENT_ID
+LIMIT 100;
+-- ============================================================
+-- 5. VERIFY TEST DOCTOR'S PATIENTS
+-- ============================================================
+SELECT DISTINCT
+    V.DOCTOR_ID,
+    V.PATIENT_ID
+FROM PATIENT_RECORD_DB.SILVER.FACT_VISIT V
+WHERE V.DOCTOR_ID = 'DOC462'
+AND V.PATIENT_ID IS NOT NULL
+ORDER BY V.PATIENT_ID;
+-- ============================================================
+-- 6. CREATE ROW ACCESS POLICY
+-- IMPORTANT:
+-- If the policy already exists and is attached to DIM_PATIENT,
+-- DO NOT RUN CREATE OR REPLACE.
+-- Use the DROP/RECREATE process shown in STEP 7-9.
+-- ============================================================
+-- ============================================================
+-- 7. REMOVE EXISTING RLS POLICY FROM DIM_PATIENT
+-- ONLY RUN IF RAP_PATIENT_DOCTOR_ACCESS IS ALREADY ATTACHED
+-- ============================================================
+USE ROLE PATIENT_SECURITY_ADMIN;
+ALTER TABLE PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+DROP ROW ACCESS POLICY PATIENT_RECORD_DB.SECURITY.RAP_PATIENT_DOCTOR_ACCESS;
+-- ============================================================
+-- 8. CREATE CORRECTED ROW ACCESS POLICY
+-- PATIENT_ID IS USED BECAUSE DIM_PATIENT DOES NOT HAVE DOCTOR_ID
+-- ============================================================
+CREATE OR REPLACE ROW ACCESS POLICY PATIENT_RECORD_DB.SECURITY.RAP_PATIENT_DOCTOR_ACCESS
+AS (PATIENT_ID VARCHAR)
+RETURNS BOOLEAN ->
+    CASE
+        WHEN IS_ROLE_IN_SESSION('PATIENT_SECURITY_ADMIN') THEN TRUE
+        WHEN IS_ROLE_IN_SESSION('PATIENT_DOCTOR') THEN
+            EXISTS (
+                SELECT 1
+                FROM PATIENT_RECORD_DB.SECURITY.DOCTOR_USER_MAPPING M
+                JOIN PATIENT_RECORD_DB.SILVER.FACT_VISIT V
+                    ON M.DOCTOR_ID = V.DOCTOR_ID
+                WHERE UPPER(M.SNOWFLAKE_USER) = UPPER(CURRENT_USER())
+                  AND M.ACCESS_ACTIVE = TRUE
+                  AND V.PATIENT_ID = PATIENT_ID
+            )
+        ELSE FALSE
+    END;
+-- ============================================================
+-- 9. ATTACH CORRECTED RLS POLICY TO DIM_PATIENT
+-- ============================================================
+ALTER TABLE PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+ADD ROW ACCESS POLICY PATIENT_RECORD_DB.SECURITY.RAP_PATIENT_DOCTOR_ACCESS
+ON (PATIENT_ID);
+-- ============================================================
+-- 10. VERIFY DIM_PATIENT RLS ATTACHMENT
+-- ============================================================
+SELECT GET_DDL(
+    'TABLE',
+    'PATIENT_RECORD_DB.SILVER.DIM_PATIENT'
+);
+-- ============================================================
+-- 11. GRANT DOCTOR WAREHOUSE ACCESS
+-- ============================================================
+USE ROLE ACCOUNTADMIN;
+GRANT USAGE
+ON WAREHOUSE WH_PATIENT_ANALYTICS
+TO ROLE PATIENT_DOCTOR;
+-- ============================================================
+-- 12. GRANT DOCTOR DATABASE ACCESS
+-- ============================================================
+GRANT USAGE
+ON DATABASE PATIENT_RECORD_DB
+TO ROLE PATIENT_DOCTOR;
+-- ============================================================
+-- 13. GRANT DOCTOR SILVER SCHEMA ACCESS
+-- ============================================================
+GRANT USAGE
+ON SCHEMA PATIENT_RECORD_DB.SILVER
+TO ROLE PATIENT_DOCTOR;
+-- ============================================================
+-- 14. GRANT DOCTOR DIM_PATIENT ACCESS
+-- ============================================================
+GRANT SELECT
+ON TABLE PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+TO ROLE PATIENT_DOCTOR;
+-- ============================================================
+-- 15. GRANT PATIENT_DOCTOR ROLE TO DOCTOR USER
+-- ============================================================
+GRANT ROLE PATIENT_DOCTOR
+TO USER DR_TEST_001;
+-- ============================================================
+-- 16. VERIFY DOCTOR ROLE ASSIGNMENT
+-- ============================================================
+SHOW GRANTS TO USER DR_TEST_001;
+-- ============================================================
+-- 17. LOGIN AS DR_TEST_001 AND VERIFY SESSION
+-- RUN AS DR_TEST_001
+-- ============================================================
+SELECT
+    CURRENT_USER() AS USER_NAME,
+    CURRENT_ROLE() AS ROLE_NAME,
+    IS_ROLE_IN_SESSION('PATIENT_DOCTOR') AS IS_DOCTOR,
+    IS_ROLE_IN_SESSION('PATIENT_SECURITY_ADMIN') AS IS_SECURITY_ADMIN;
+-- ============================================================
+-- 18. VERIFY CURRENT DOCTOR MAPPING
+-- RUN AS DR_TEST_001
+-- ============================================================
+SELECT
+    SNOWFLAKE_USER,
+    DOCTOR_ID,
+    ACCESS_ACTIVE
+FROM PATIENT_RECORD_DB.SECURITY.DOCTOR_USER_MAPPING
+WHERE UPPER(SNOWFLAKE_USER) = UPPER(CURRENT_USER());
+-- ============================================================
+-- 19. TEST DOCTOR PATIENT ACCESS
+-- RUN AS DR_TEST_001
+-- ============================================================
+SELECT
+    PATIENT_ID,
+    FIRST_NAME,
+    LAST_NAME
+FROM PATIENT_RECORD_DB.SILVER.DIM_PATIENT
+ORDER BY PATIENT_ID;
+-- ============================================================
+-- 20. VERIFY EXPECTED PATIENTS
+-- RUN AS DR_TEST_001
+-- This query shows the patients that DOC462 is associated with.
+-- ============================================================
+SELECT DISTINCT
+    V.DOCTOR_ID,
+    V.PATIENT_ID
+FROM PATIENT_RECORD_DB.SILVER.FACT_VISIT V
+JOIN PATIENT_RECORD_DB.SECURITY.DOCTOR_USER_MAPPING M
+    ON M.DOCTOR_ID = V.DOCTOR_ID
+WHERE UPPER(M.SNOWFLAKE_USER) = UPPER(CURRENT_USER())
+AND M.ACCESS_ACTIVE = TRUE
+ORDER BY V.PATIENT_ID;
+-- ============================================================
+-- 21. EXPECTED SECURITY FLOW
+-- ============================================================
+-- DR_TEST_001
+--      ↓
+-- DOCTOR_USER_MAPPING
+--      ↓
+-- DOC462
+--      ↓
+-- FACT_VISIT
+--      ↓
+-- PATIENT_ID
+--      ↓
+-- DIM_PATIENT
+--      ↓
+-- RAP_PATIENT_DOCTOR_ACCESS
+--      ↓
+-- ONLY AUTHORIZED PATIENTS ARE RETURNED
+-- ============================================================
+-- 22. EXPECTED RESULT
+-- ============================================================
+-- If:
+-- DR_TEST_001 → DOC462
+-- and DOC462 has visits for:
+-- PAT1018
+-- PAT1048
+-- PAT1078
+-- then DR_TEST_001 should see only:
+-- PAT1018
+-- PAT1048
+-- PAT1078
+-- ============================================================

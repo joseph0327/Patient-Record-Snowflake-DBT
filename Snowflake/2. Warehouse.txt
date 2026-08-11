@@ -1,0 +1,50 @@
+CREATE OR REPLACE WAREHOUSE PATIENT_WH
+    WAREHOUSE_SIZE = 'XSMALL'
+    WAREHOUSE_TYPE = 'STANDARD'
+    AUTO_SUSPEND = 60
+    AUTO_RESUME = TRUE
+    INITIALLY_SUSPENDED = TRUE;
+
+SHOW WAREHOUSES;
+
+
+USE WAREHOUSE WH_PATIENT_ETL;
+-- ETL Warehouse
+-- Used for loading and transforming data.
+-- Used for: COPY INTO, Snowpipe, Streams, Tasks, dbt transformations
+CREATE OR REPLACE WAREHOUSE WH_PATIENT_ETL
+WITH
+WAREHOUSE_SIZE = 'XSMALL'
+AUTO_SUSPEND = 60
+AUTO_RESUME = TRUE
+INITIALLY_SUSPENDED = TRUE;
+
+
+-- Analytics Warehouse
+-- Used by analysts and data scientists.
+-- Used for:  Ad-hoc queries, Data exploration, Analysis
+CREATE OR REPLACE WAREHOUSE WH_PATIENT_ANALYTICS
+WITH
+WAREHOUSE_SIZE = 'SMALL'
+AUTO_SUSPEND = 120
+AUTO_RESUME = TRUE
+INITIALLY_SUSPENDED = TRUE;
+
+
+-- Reporting Warehouse
+-- Used by Power BI/Tableau.
+-- Used for: Dashboards, Reports, Executive analytics
+CREATE OR REPLACE WAREHOUSE WH_PATIENT_REPORTING
+WITH
+WAREHOUSE_SIZE = 'SMALL'
+AUTO_SUSPEND = 300
+AUTO_RESUME = TRUE
+INITIALLY_SUSPENDED = TRUE;
+
+
+
+
+-- To remove a Snowflake warehouse, use:
+DROP WAREHOUSE IF EXISTS PATIENT_WH;
+
+SHOW warehouses
