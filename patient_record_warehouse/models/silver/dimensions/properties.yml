@@ -1,0 +1,126 @@
+version: 2
+models:
+  - name: dim_patient
+    description: Patient dimension containing demographic information with SCD Type 2 history tracking.
+    columns:
+      - name: patient_sk
+        description: Surrogate key generated for patient dimension.
+        tests:
+          - unique
+          - not_null
+      - name: patient_id
+        description: Natural key from source patient system.
+        tests:
+          - not_null
+      - name: is_current
+        description: Indicates the active patient record.
+        tests:
+          - accepted_values:
+              values:
+                - true
+                - false
+  - name: dim_patient_history
+    description: Historical patient records from SCD Type 2 dimension.
+    columns:
+      - name: patient_sk
+        description: Surrogate key for historical patient record.
+        tests:
+          - unique
+          - not_null
+      - name: patient_id
+        description: Natural patient identifier.
+        tests:
+          - not_null
+  - name: dim_patient_current
+    description: Current active patient records only.
+    columns:
+      - name: patient_sk
+        description: Surrogate key for current patient record.
+        tests:
+          - unique
+          - not_null
+      - name: patient_id
+        description: Natural patient identifier.
+        tests:
+          - not_null
+  - name: dim_doctor
+    description: Doctor dimension containing doctor identifiers used for visit analytics.
+    columns:
+      - name: doctor_sk
+        description: Surrogate key generated for doctor dimension.
+        tests:
+          - unique
+          - not_null
+      - name: doctor_id
+        description: Natural doctor identifier from source system.
+        tests:
+          - not_null
+  - name: dim_date
+    description: Calendar date dimension used for time-based analysis.
+    columns:
+      - name: date_sk
+        description: Surrogate key for date dimension.
+        tests:
+          - unique
+          - not_null
+      - name: full_date
+        description: Actual calendar date.
+        tests:
+          - unique
+          - not_null
+  - name: dim_department
+    description: Department dimension containing hospital departments.
+    columns:
+      - name: department_sk
+        description: Surrogate key generated for department dimension.
+        tests:
+          - unique
+          - not_null
+      - name: department_name
+        description: Department name.
+        tests:
+          - unique
+          - not_null
+  - name: dim_insurance
+    description: Insurance dimension containing patient insurance information with SCD Type 2 tracking.
+    columns:
+      - name: insurance_sk
+        description: Surrogate key generated for insurance dimension.
+        tests:
+          - unique
+          - not_null
+      - name: insurance_id
+        description: Natural insurance identifier from source system.
+        tests:
+          - not_null
+      - name: is_current
+        description: Indicates current active insurance record.
+        tests:
+          - accepted_values:
+              values:
+                - true
+                - false
+  - name: dim_insurance_history
+    description: Historical insurance records from SCD Type 2 dimension.
+    columns:
+      - name: insurance_sk
+        description: Historical insurance surrogate key.
+        tests:
+          - unique
+          - not_null
+      - name: insurance_id
+        description: Natural insurance identifier.
+        tests:
+          - not_null
+  - name: dim_insurance_current
+    description: Current active insurance records only.
+    columns:
+      - name: insurance_sk
+        description: Current insurance surrogate key.
+        tests:
+          - unique
+          - not_null
+      - name: insurance_id
+        description: Natural insurance identifier.
+        tests:
+          - not_null

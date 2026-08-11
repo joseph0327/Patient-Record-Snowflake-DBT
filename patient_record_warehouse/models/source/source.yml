@@ -1,0 +1,101 @@
+version: 2
+sources:
+  - name: PATIENT_RECORD_DB
+    description: "Healthcare patient record Bronze layer source system"
+    database: PATIENT_RECORD_DB
+    schema: BRONZE
+    
+    tables:
+      - name: BRONZE_PATIENT
+        description: "Raw patient records ingested from the patient API"
+        loaded_at_field: INGESTION_TIMESTAMP
+        freshness:
+          warn_after:
+            count: 24
+            period: hour
+          error_after:
+            count: 48
+            period: hour
+        
+
+      - name: BRONZE_VISIT
+        description: "Raw patient visit records ingested from the visit API"
+        loaded_at_field: INGESTION_TIMESTAMP
+        freshness:
+          warn_after:
+            count: 24
+            period: hour
+          error_after:
+            count: 48
+            period: hour
+       
+         
+      - name: BRONZE_DIAGNOSIS
+        description: "Raw diagnosis records loaded from JSON files"
+        loaded_at_field: INGESTION_TIMESTAMP
+        freshness:
+          warn_after:
+            count: 24
+            period: hour
+          error_after:
+            count: 48
+            period: hour
+        
+
+      - name: BRONZE_MEDICATION
+        description: "Raw medication records ingested from medication API"
+        loaded_at_field: INGESTION_TIMESTAMP
+        freshness:
+          warn_after:
+            count: 24
+            period: hour
+          error_after:
+            count: 48
+            period: hour
+        columns:
+          - name: MEDICATION_ID
+            description: "Unique medication identifier"
+            tests:
+              - not_null
+              - unique
+          - name: PATIENT_ID
+            description: "Patient associated with the medication record"
+            tests:
+              - not_null
+          - name: INGESTION_TIMESTAMP
+            description: "Timestamp when the record was ingested into Snowflake"
+            tests:
+              - not_null
+      - name: BRONZE_LAB_RESULT
+        description: "Raw laboratory results loaded from CSV files"
+        loaded_at_field: INGESTION_TIMESTAMP
+        freshness:
+          warn_after:
+            count: 24
+            period: hour
+          error_after:
+            count: 48
+            period: hour
+        
+      - name: BRONZE_BILLING
+        description: "Raw billing records loaded from source files"
+        loaded_at_field: INGESTION_TIMESTAMP
+        freshness:
+          warn_after:
+            count: 24
+            period: hour
+          error_after:
+            count: 48
+            period: hour
+       
+      - name: BRONZE_INSURANCE
+        description: "Raw insurance records loaded from source files"
+        loaded_at_field: INGESTION_TIMESTAMP
+        freshness:
+          warn_after:
+            count: 24
+            period: hour
+          error_after:
+            count: 48
+            period: hour
+        

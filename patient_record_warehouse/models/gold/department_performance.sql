@@ -1,0 +1,130 @@
+{{ config(materialized='table',schema='GOLD') }}
+WITH visit AS (
+    SELECT *
+    FROM {{ ref('fact_visit') }}
+),
+billing AS (
+    SELECT *
+    FROM {{ ref('fact_billing_history') }}
+),
+diagnosis AS (
+    SELECT *
+    FROM {{ ref('fact_diagnosis') }}
+),
+date_dim AS (
+    SELECT DATE_SK,FULL_DATE,YEAR,MONTH,MONTH_NAME,QUARTER
+    FROM {{ ref('dim_date') }}
+),
+visit_metrics AS (
+    SELECT
+        v.DEPARTMENT_NAME,
+        d.DATE_SK,
+        COUNT(DISTINCT v.VISIT_ID) AS TOTAL_VISITS,
+        COUNT(DISTINCT CASE
+            WHEN v.VISIT_STATUS = 'COMPLETED' THEN v.VISIT_ID
+        END) AS COMPLETED_VISITS,
+        COUNT(DISTINCT CASE
+            WHEN v.VISIT_STATUS = 'CANCELLED' THEN v.VISIT_ID
+        END) AS CANCELLED_VISITS,
+        COUNT(DISTINCT CASE
+            WHEN v.VISIT_STATUS = 'NO_SHOW' THEN v.VISIT_ID
+        END) AS NO_SHOW_VISITS,
+        COUNT(DISTINCT v.PATIENT_SK) AS UNIQUE_PATIENTS,
+        COUNT(DISTINCT v.DOCTOR_SK) AS UNIQUE_DOCTORS
+    FROM visit v
+    INNER JOIN date_dim d
+    ON v.date_sk = d.DATE_SK
+    GROUP BY
+        v.DEPARTMENT_NAME,
+        d.DATE_SK
+    
+),
+billing_metrics AS (
+    SELECT
+        v.DEPARTMENT_NAME AS DEPARTMENT,
+        b.DATE_SK,
+        COUNT(DISTINCT b.CLAIM_NUMBER) AS TOTAL_CLAIMS,
+        COALESCE(SUM(b.AMOUNT),0) AS TOTAL_BILLED_AMOUNT,
+        COALESCE(SUM(
+            CASE
+                WHEN b.BILLING_STATUS = 'PAID' THEN b.AMOUNT
+                ELSE 0
+            END
+        ),0) AS TOTAL_PAID_AMOUNT,
+        COALESCE(SUM(
+            CASE
+                WHEN b.BILLING_STATUS IN ('DENIED','REJECTED') THEN b.AMOUNT
+                ELSE 0
+            END
+        ),0) AS TOTAL_DENIED_AMOUNT,
+        COALESCE(SUM(
+            CASE
+                WHEN b.BILLING_STATUS IN ('PENDING','SUBMITTED') THEN b.AMOUNT
+                ELSE 0
+            END
+        ),0) AS TOTAL_PENDING_AMOUNT
+    FROM billing b
+    INNER JOIN visit v
+    ON b.PATIENT_SK = v.PATIENT_SK
+    AND b.DATE_SK = v.DATE_SK
+    GROUP BY
+        v.DEPARTMENT_NAME,
+        b.DATE_SK
+),
+diagnosis_metrics AS (
+    SELECT
+        v.DEPARTMENT_NAME,
+        v.DATE_SK,
+        COUNT(DISTINCT dg.DIAGNOSIS_ID) AS TOTAL_DIAGNOSES
+    FROM diagnosis dg
+    INNER JOIN visit v
+    ON dg.VISIT_ID = v.VISIT_ID
+    GROUP BY
+        v.DEPARTMENT_NAME,
+        v.DATE_SK
+)
+SELECT
+    vm.DEPARTMENT_NAME,
+    vm.DATE_SK,
+    d.FULL_DATE AS PERFORMANCE_DATE,
+    d.YEAR AS PERFORMANCE_YEAR,
+    d.MONTH AS PERFORMANCE_MONTH,
+    d.MONTH_NAME AS PERFORMANCE_MONTH_NAME,
+    d.QUARTER AS PERFORMANCE_QUARTER,
+    vm.TOTAL_VISITS,
+    vm.COMPLETED_VISITS,
+    vm.CANCELLED_VISITS,
+    vm.NO_SHOW_VISITS,
+    vm.UNIQUE_PATIENTS,
+    vm.UNIQUE_DOCTORS,
+    COALESCE(dm.TOTAL_DIAGNOSES,0) AS TOTAL_DIAGNOSES,
+    COALESCE(bm.TOTAL_CLAIMS,0) AS TOTAL_CLAIMS,
+    COALESCE(bm.TOTAL_BILLED_AMOUNT,0) AS TOTAL_BILLED_AMOUNT,
+    COALESCE(bm.TOTAL_PAID_AMOUNT,0) AS TOTAL_PAID_AMOUNT,
+    COALESCE(bm.TOTAL_DENIED_AMOUNT,0) AS TOTAL_DENIED_AMOUNT,
+    COALESCE(bm.TOTAL_PENDING_AMOUNT,0) AS TOTAL_PENDING_AMOUNT,
+    ROUND(
+        vm.COMPLETED_VISITS * 100.0
+        / NULLIF(vm.TOTAL_VISITS,0),
+        2
+    ) AS COMPLETION_RATE,
+    ROUND(
+        vm.NO_SHOW_VISITS * 100.0
+        / NULLIF(vm.TOTAL_VISITS,0),
+        2
+    ) AS NO_SHOW_RATE,
+    ROUND(
+        COALESCE(bm.TOTAL_BILLED_AMOUNT,0)
+        / NULLIF(vm.TOTAL_VISITS,0),
+        2
+    ) AS REVENUE_PER_VISIT,
+    CURRENT_TIMESTAMP() AS LOAD_TIMESTAMP
+FROM visit_metrics vm
+LEFT JOIN billing_metrics bm
+ON vm.DEPARTMENT_NAME = bm.DEPARTMENT
+AND vm.DATE_SK = bm.DATE_SK
+LEFT JOIN diagnosis_metrics dm
+ON vm.DEPARTMENT_NAME = dm.DEPARTMENT_NAME
+AND vm.DATE_SK = dm.DATE_SK
+LEFT JOIN date_dim d
+ON vm.DATE_SK = d.DATE_SK

@@ -1,0 +1,64 @@
+version: 2
+
+models:
+
+  - name: stg_patient
+    description: "Silver patient table with CDC deduplication"
+    columns:
+      - name: PATIENT_ID
+        description: "Unique patient identifier after CDC processing"
+        tests:
+          - not_null
+          - unique
+
+      - name: EMAIL
+        description: "Patient email address"
+        tests:
+          - not_null
+
+      - name: INGESTION_TIMESTAMP
+        description: "Timestamp when record entered warehouse"
+        tests:
+          - not_null
+
+  - name: stg_visit
+    description: "Silver visit table with CDC deduplication"
+    columns:
+      - name: VISIT_ID
+        description: "Unique visit identifier after CDC processing"
+        tests:
+          - not_null
+          - unique
+      - name: PATIENT_ID
+        description: "Patient associated with the visit"
+        tests:
+          - not_null
+      - name: INGESTION_TIMESTAMP
+        description: "Timestamp when record entered warehouse"
+        tests:
+          - not_null
+
+  - name: stg_diagnosis
+    description: "Silver diagnosis table with CDC deduplication"
+    columns:
+      - name: DIAGNOSIS_ID
+        description: "Unique diagnosis identifier after CDC processing"
+        tests:
+          - not_null
+          - unique
+      - name: VISIT_ID
+        description: "Visit associated with the diagnosis"
+        tests:
+          - not_null
+      - name: INGESTION_TIMESTAMP
+        description: "Timestamp when record entered warehouse"
+        tests:
+          - not_null
+      - name: SEVERITY
+        tests:
+          - accepted_values:
+              values:
+                - SEVERE
+                - MODERATE 
+                - MILD
+                - UNKNOWN

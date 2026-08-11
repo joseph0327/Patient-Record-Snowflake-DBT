@@ -1,0 +1,92 @@
+WITH visits AS (
+
+    SELECT
+        DATE_TRUNC('MONTH', APPOINTMENT_DATE) AS MONTH_START,
+        VISIT_ID,
+        PATIENT_ID,
+        DEPARTMENT_NAME,
+        VISIT_STATUS
+    FROM {{ ref('fact_visit') }}
+
+),
+
+billing AS (
+
+    SELECT
+        DATE_TRUNC('MONTH', BILLING_DATE) AS MONTH_START,
+        BILLING_ID,
+        PATIENT_ID,
+        AMOUNT,
+        BILLING_STATUS
+    FROM {{ ref('fact_billing_current') }}
+
+),
+
+monthly_visits AS (
+
+    SELECT
+        MONTH_START,
+
+        COUNT(DISTINCT VISIT_ID) AS TOTAL_VISITS,
+
+        COUNT(DISTINCT PATIENT_ID) AS UNIQUE_PATIENTS,
+
+        COUNT(DISTINCT CASE
+            WHEN VISIT_STATUS = 'COMPLETED'
+            THEN VISIT_ID
+        END) AS COMPLETED_VISITS,
+
+        COUNT(DISTINCT CASE
+            WHEN VISIT_STATUS = 'CANCELLED'
+            THEN VISIT_ID
+        END) AS CANCELLED_VISITS,
+
+        COUNT(DISTINCT CASE
+            WHEN VISIT_STATUS = 'NO_SHOW'
+            THEN VISIT_ID
+        END) AS NO_SHOW_VISITS
+
+    FROM visits
+    GROUP BY MONTH_START
+
+),
+
+monthly_billing AS (
+
+    SELECT
+        MONTH_START,
+
+        SUM(AMOUNT) AS TOTAL_REVENUE,
+
+        COUNT(DISTINCT BILLING_ID) AS TOTAL_BILLING_TRANSACTIONS
+
+    FROM billing
+    WHERE BILLING_STATUS NOT IN ('CANCELLED', 'VOID')
+    GROUP BY MONTH_START
+
+)
+
+SELECT
+    v.MONTH_START,
+    v.TOTAL_VISITS,
+    v.UNIQUE_PATIENTS,
+    v.COMPLETED_VISITS,
+    v.CANCELLED_VISITS,
+    v.NO_SHOW_VISITS,
+    COALESCE(b.TOTAL_REVENUE, 0) AS TOTAL_REVENUE,
+
+    COALESCE(b.TOTAL_BILLING_TRANSACTIONS, 0)
+        AS TOTAL_BILLING_TRANSACTIONS,
+
+    ROUND(
+        COALESCE(b.TOTAL_REVENUE, 0)
+        / NULLIF(v.TOTAL_VISITS, 0),
+        2
+    ) AS REVENUE_PER_VISIT
+
+FROM monthly_visits v
+
+LEFT JOIN monthly_billing b
+    ON v.MONTH_START = b.MONTH_START
+
+ORDER BY v.MONTH_START

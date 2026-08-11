@@ -1,0 +1,6 @@
+SELECT
+    BILLING_ID,
+    BILLING_STATUS,
+    AMOUNT,
+FROM {{ ref('stg_billing') }}
+WHERE BILLING_STATUS IN ('PAID', 'DENIED', 'PENDING')

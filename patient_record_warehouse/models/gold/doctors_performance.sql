@@ -1,0 +1,87 @@
+WITH visit AS (
+    SELECT *
+    FROM {{ ref('fact_visit') }}
+),
+billing AS (
+    SELECT *
+    FROM {{ ref('fact_billing_history') }}
+),
+diagnosis AS (
+    SELECT *
+    FROM {{ ref('fact_diagnosis') }}
+),
+doctor AS (
+    SELECT *
+    FROM {{ ref('dim_doctor') }}
+),
+date_dim AS (
+    SELECT DATE_SK,FULL_DATE,YEAR,MONTH,MONTH_NAME,QUARTER
+    FROM {{ ref('dim_date') }}
+)
+SELECT
+    d.DOCTOR_SK,
+    d.DOCTOR_ID,
+    v.DATE_SK,
+    dd.FULL_DATE AS VISIT_DATE,
+    dd.YEAR AS VISIT_YEAR,
+    dd.MONTH AS VISIT_MONTH,
+    dd.MONTH_NAME AS VISIT_MONTH_NAME,
+    dd.QUARTER AS VISIT_QUARTER,
+    COUNT(DISTINCT v.VISIT_ID) AS TOTAL_VISITS,
+    COUNT(DISTINCT CASE
+        WHEN v.VISIT_STATUS = 'COMPLETED' THEN v.VISIT_ID
+    END) AS COMPLETED_VISITS,
+    COUNT(DISTINCT CASE
+        WHEN v.VISIT_STATUS = 'CANCELLED' THEN v.VISIT_ID
+    END) AS CANCELLED_VISITS,
+    COUNT(DISTINCT CASE
+        WHEN v.VISIT_STATUS = 'NO_SHOW' THEN v.VISIT_ID
+    END) AS NO_SHOW_VISITS,
+    COUNT(DISTINCT v.PATIENT_SK) AS UNIQUE_PATIENTS,
+    COUNT(DISTINCT dg.DIAGNOSIS_ID) AS TOTAL_DIAGNOSES,
+    COUNT(DISTINCT b.CLAIM_NUMBER) AS TOTAL_CLAIMS,
+    COALESCE(SUM(b.AMOUNT),0) AS TOTAL_BILLED_AMOUNT,
+    COALESCE(SUM(
+        CASE
+            WHEN b.BILLING_STATUS = 'PAID' THEN b.AMOUNT
+            ELSE 0
+        END
+    ),0) AS TOTAL_PAID_AMOUNT,
+    COALESCE(SUM(
+        CASE
+            WHEN b.BILLING_STATUS IN ('DENIED','REJECTED') THEN b.AMOUNT
+            ELSE 0
+        END
+    ),0) AS TOTAL_DENIED_AMOUNT,
+    ROUND(
+        COUNT(DISTINCT CASE
+            WHEN v.VISIT_STATUS = 'COMPLETED' THEN v.VISIT_ID
+        END) * 100.0
+        / NULLIF(COUNT(DISTINCT v.VISIT_ID),0),
+        2
+    ) AS COMPLETION_RATE,
+    ROUND(
+        COALESCE(SUM(b.AMOUNT),0)
+        / NULLIF(COUNT(DISTINCT v.VISIT_ID),0),
+        2
+    ) AS AVG_REVENUE_PER_VISIT,
+    CURRENT_TIMESTAMP() AS LOAD_TIMESTAMP
+FROM visit v
+LEFT JOIN doctor d
+ON v.DOCTOR_SK = d.DOCTOR_SK
+LEFT JOIN date_dim dd
+ON v.DATE_SK = dd.DATE_SK
+LEFT JOIN diagnosis dg
+ON v.VISIT_ID = dg.VISIT_ID
+LEFT JOIN billing b
+ON v.PATIENT_SK = b.PATIENT_SK
+AND v.DATE_SK = b.DATE_SK
+GROUP BY
+    d.DOCTOR_SK,
+    d.DOCTOR_ID,
+    v.DATE_SK,
+    dd.FULL_DATE,
+    dd.YEAR,
+    dd.MONTH,
+    dd.MONTH_NAME,
+    dd.QUARTER
