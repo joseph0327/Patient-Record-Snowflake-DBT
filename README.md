@@ -68,17 +68,7 @@ PATIENT_RECORD_DB
 
 ### Snowflake Database Screenshot
 
-Add your Snowflake screenshot to:
-
-```text
-docs/images/snowflake-database.png
-```
-
-Then it will appear here:
-
 ![Snowflake Database Architecture](https://github.com/joseph0327/Patient-Record-Snowflake-DBT/blob/7fa839d8bfca5e7c690649ced0d4c3aa335daf9e/Snowflake/snowflake.png)
-
-> **Tip:** If the screenshot contains sensitive information, account identifiers, URLs, credentials, or real patient information, remove/redact them before committing it to GitHub.
 
 ---
 
